@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+<body>
+    <a href="#" onclick="app.lines.activate(); return false;">Lines</a> <br>
+    <div class="container align-content-center align-self-center">
+        <div class="row justify-content-md-center" id="settings">
+            <input type="text" placeholder="Length" id="x" style="margin-top: 10px" class="col-3">
+            <input type="text" placeholder="Width" id="y" style="margin-top: 10px" class="col-3">
+            <input type="button" class="btn btn-primary col-3" id="button" value="click">
+            <button class="btn btn-danger col-2" id="deleteProgressBtn">Удалить прогресс</button>
+            <button class="btn btn-danger col-2" id="test">Отправить запрос</button>
+        </div>
+    </div>
+    <canvas style="margin-left:50px; margin-top:10px" id="canvas" resize></canvas>
+
+    <div class="modal" tabindex="-1" role="dialog" id="addRoomModal">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Обнаружено новое помещение!</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Данное помещение будет сдаваться?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="confirmNewRoom">Да</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Нет</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
