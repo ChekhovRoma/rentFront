@@ -1,7 +1,7 @@
 const ps = require('path');
 const HTMLWebpackPlugin = require('html-webpack-plugin');
 const {CleanWebpackPlugin} = require('clean-webpack-plugin');
-
+require('dotenv').config();
 module.exports = {
     context: ps.resolve(__dirname, 'src'),
     mode: 'development',
@@ -10,7 +10,7 @@ module.exports = {
     },
     output: {
         filename: "[name].[contenthash].js",
-        path: ps.resolve(__dirname, 'dist')
+        path: ps.resolve(__dirname, 'public')
     },
     node:{
         fs: 'empty'

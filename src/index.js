@@ -5,15 +5,45 @@ import 'popper.js'
 import 'bootstrap'
 // const file = require('fs');
 // const savePath = require('path');
+require('dotenv').config();
 
+let host = "http://127.0.0.1:8000";
+let xMeters;
+let yMeters;
+let placeId = 0;
+let currentStage; // 1 - lines; 2 - rooms
 paper.install(window);
 window.$ = window.jQuery = $;
-window.onload = function () {
+
+$(document).ready(function () {
+    if (!localStorage.getItem('paths')) {
+        $(document).trigger('createNewSchema');
+    } else $(document).trigger('start');
+});
+
+$(document).on('createNewSchema', function () {
+    $('#schemaCreator').modal('show');
+
+    $('#beginPainting').click(function () {
+        xMeters = $('#width').val();
+        yMeters = $('#height').val();
+        $('#schemaCreator').modal('hide');
+        $(document).trigger('start');
+        currentStage = 1;
+    });
+    $('#loadSchema').click(function () {
+        placeId = $('#placeId').val();
+        $(document).trigger('start');
+        $('#schemaCreator').modal('hide');
+        currentStage = 1;
+    })
+});
+
+
+$(document).on('start', function () {
     paper.setup('canvas');
     let group = new Group(); // все path включая area
-    let roomArray = new Group();
     let path = new Path(); // прямая рисуемая пользователем
-    let isGoodPoint = false;
     let rectangle; // если обнаружено помещение объект будет тут
     let isRoom = false; // пользователь решил что будет сдавать true
     let isClosed = true;
@@ -27,13 +57,15 @@ window.onload = function () {
     let SmallestPointY = 50;
     let BiggestPointX = 700;
     let BiggestPointY = 700;
-    let xMeters;
-    let yMeters;
+
     let area;
+    let contactPoints = [];
+    let cntctPointsGroup = new Group();
 
     if (localStorage.getItem('paths')) {
         xMeters = localStorage.getItem('width');
         yMeters = localStorage.getItem('height');
+        currentStage = parseInt(localStorage.getItem('stage'));
         ratioCalculation(xMeters, yMeters);
         drawGrid();
         drawRuler();
@@ -42,22 +74,114 @@ window.onload = function () {
         group = parentGroup.children[0];
         if (group.children.length > 1) isClosed = group.lastChild.closed;
         area = group.firstChild;
+
         if (localStorage.getItem('rooms')) {
             let groupRoomsParent = new Group();
             let groupRoomsHelpersParent = new Group();
             groupRoomsParent.importSVG(localStorage.getItem('rooms'));
-            groupRoomsHelpersParent.importSVG(localStorage.getItem('rooms-helpers'));
+            // groupRoomsHelpersParent.importSVG(localStorage.getItem('rooms-helpers'));
             groupRooms = groupRoomsParent.firstChild;
-            groupRoomHelpers = groupRoomsHelpersParent.firstChild;
+            // groupRoomHelpers = groupRoomsHelpersParent.firstChild;
             roomCounter = groupRooms.children.length;
         }
-    } else {
-        let button = document.getElementById("button");
-        button.onclick = function () {
-            drawArea();
-        };
     }
 
+    if (placeId > 0) {
+
+        let schema = getPlaceSchema(placeId)
+            .then(data => {
+                xMeters = data.width;
+                yMeters = data.height;
+                currentStage = 2;
+                ratioCalculation(xMeters, yMeters);
+                drawGrid();
+                drawRuler();
+                let parentGroup = new Group();
+                parentGroup.importSVG(data.paths);
+                group = parentGroup.children[0];
+                if (group.children.length > 1) isClosed = group.lastChild.closed;
+                area = group.firstChild;
+
+                let groupRoomsParent = new Group();
+
+                groupRoomsParent.importSVG(data.rooms);
+                groupRooms = groupRoomsParent.firstChild;
+                roomCounter = groupRooms.children.length;
+
+            });
+        // console.log("schema: ");
+        // console.log(schema['width']);
+
+
+        // parentGroup.importSVG(schema['paths']);
+        // group = parentGroup.children[0];
+        // if (group.children.length > 1) isClosed = group.lastChild.closed;
+        // area = group.firstChild;
+
+
+    } else {
+        drawArea();
+    }
+
+    async function getPlaceSchema(placeId) {
+        // ----------------------------------------
+        return fetch(host + "/getSchemaById", {
+            crossDomain: true,
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+
+            body: JSON.stringify({
+                'placeId': placeId,
+            })
+        })
+            .then(response => response.json())
+            .then(body => {
+                return body;
+            })
+
+        // ---------------------------------------------------------
+        // const resp = await fetch(host + "/getSchemaById", {
+        //     crossDomain: true,
+        //     method: 'POST',
+        //     mode: 'cors',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //
+        //     body: JSON.stringify({
+        //         'placeId': placeId,
+        //     })
+        // });
+        // const json = await resp.json();
+        // return json;
+    }
+
+    function figureOutStage() {
+        switch (currentStage) {
+            case 1: {
+                $('#helperText').text('Нарисуйте стены без учета окон и дверей, затем нажмите далее');
+                $('#previousStage').attr('disabled', true);
+                $('#nextStage').attr('disabled', false);
+                window.app.lines.activate();
+                break;
+            }
+            case 2: {
+                console.log(currentStage);
+                $('#helperText').text('Нажимайте внутри помещения для определения комнаты');
+                $('#nextStage').attr('disabled', true);
+                $('#previousStage').attr('disabled', false);
+                window.app.rooms.activate();
+                break;
+            }
+            case 3: {
+                console.log('sd');
+                break;
+            }
+        }
+    }
 
     function ratioCalculation(x, y) {
 
@@ -239,9 +363,14 @@ window.onload = function () {
         area.strokeColor = 'black';
         area.name = 'area';
 
+        console.log(area.segments);
+        for(let i = 0 ; i < area.segments.length; i ++){
+            contactPoints.push(area.segments[i].point);
+        }
+
         group.addChild(area);
-        roomArray.addChild(area);
-        console.log(area);
+        console.log("кп");
+        console.log(contactPoints);
 
     }
 
@@ -277,6 +406,51 @@ window.onload = function () {
         }
     } //отрезать лишнее если вертикальна€ лини€ вышла за пределы
 
+    function findRoom(event) {
+        let cross = {
+            topLine: new Path(event.point, new Point(event.point.x, event.point.y - 1000)),
+            bottomLine: new Path(event.point, new Point(event.point.x, event.point.y + 1000)),
+            rightLine: new Path(event.point, new Point(event.point.x + 1000, event.point.y)),
+            leftLine: new Path(event.point, new Point(event.point.x - 1000, event.point.y)),
+        }
+        for (let line in cross) {
+            cross[line] = findShortestPoint(cross[line]);
+        }
+        let room = new Path.Rectangle(
+            new Point(cross.leftLine.firstSegment.point.x + 2,
+                cross.topLine.firstSegment.point.y + 2),
+            new Point(cross.rightLine.firstSegment.point.x - 2,
+                cross.bottomLine.firstSegment.point.y - 2)
+        );
+        room.fillColor = 'green';
+        room.opacity = 0.5;
+        groupRooms.addChild(room);
+    }
+
+    function findShortestPoint(path) {
+        let intersectionsArray = [];
+        let intersections;
+        for (let i = 0; i < group.children.length; i++) {
+            intersections = path.getIntersections(group.children[i]);
+            if (intersections.length !== 0) {
+                intersectionsArray.push(intersections[0]);
+            }
+        }
+        if (intersectionsArray.length !== 0) {
+            let shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(path.firstSegment.point));
+            let shortestLineIndex = 0;
+            let currentLine;
+            for (let i = 1; i < intersectionsArray.length; i++) {
+                currentLine = new Path(new Point(intersectionsArray[i].point), new Point(path.firstSegment.point));
+                if (shortestLine.length > currentLine.length) {
+                    shortestLine = currentLine;
+                    shortestLineIndex = i;
+                }
+            }
+            return shortestLine;
+        } else return 0;
+    }
+
     function findRectangle() {
         var centralLine = new Path(new Point(path.interiorPoint), new Point(path.interiorPoint.x, path.interiorPoint.y - 1000));
         centralLine = findShortestLineForCentral(centralLine);
@@ -307,19 +481,19 @@ window.onload = function () {
     }
 
     function findShortestLineForCentral(line) {
-        var intersectionsArray = [];
-        var intersections;
-        for (var i = 0; i < group.children.length - 1; i++) {
+        let intersectionsArray = [];
+        let intersections;
+        for (let i = 0; i < group.children.length - 1; i++) {
             intersections = line.getIntersections(group.children[i]);
             if (intersections.length !== 0) {
                 intersectionsArray.push(intersections[0]);
             }
         }
         if (intersectionsArray.length !== 0) {
-            var shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(path.interiorPoint));
-            var shortestLineIndex = 0;
-            var currentLine;
-            for (i = 1; i < intersectionsArray.length; i++) {
+            let shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(path.interiorPoint));
+            let shortestLineIndex = 0;
+            let currentLine;
+            for (let i = 1; i < intersectionsArray.length; i++) {
                 currentLine = new Path(new Point(intersectionsArray[i].point), new Point(path.interiorPoint));
                 if (shortestLine.length > currentLine.length) {
                     shortestLine = currentLine;
@@ -331,19 +505,19 @@ window.onload = function () {
     }
 
     function findShortestLine(centralLine, line) {
-        var intersectionsArray = [];
-        var intersections;
-        for (var i = 0; i < group.children.length - 1; i++) {
+        let intersectionsArray = [];
+        let intersections;
+        for (let i = 0; i < group.children.length - 1; i++) {
             intersections = line.getIntersections(group.children[i]);
             if (intersections.length !== 0) {
                 intersectionsArray.push(intersections[0]);
             }
         }
         if (intersectionsArray.length !== 0) {
-            var shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(centralLine.interiorPoint));
-            var shortestLineIndex = 0;
-            var currentLine;
-            for (i = 1; i < intersectionsArray.length; i++) {
+            let shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(centralLine.interiorPoint));
+            let shortestLineIndex = 0;
+            let currentLine;
+            for (let i = 1; i < intersectionsArray.length; i++) {
                 currentLine = new Path(new Point(intersectionsArray[i].point), new Point(centralLine.interiorPoint));
                 if (shortestLine.length > currentLine.length) {
                     shortestLine = currentLine;
@@ -355,8 +529,8 @@ window.onload = function () {
     }
 
     function showIntersections() {
-        for (var i = 0; i < group.children.length - 1; i++) {
-            var intersectPoint = path.getIntersections(group.children[i]);
+        for (let i = 0; i < group.children.length - 1; i++) {
+            let intersectPoint = path.getIntersections(group.children[i]);
             intersectPoint.map(function (point) {
                 let intersect = new Path.Circle({
                     center: point.point,
@@ -369,7 +543,7 @@ window.onload = function () {
     } // рисует точки пересечени€
 
     function showLengthHorizontal() {
-        var textLength = new PointText(path.interiorPoint.x - 10, path.interiorPoint.y - 5);
+        let textLength = new PointText(path.interiorPoint.x - 10, path.interiorPoint.y - 5);
         path.length < (BiggestPointX - SmallestPointX) ?
             textLength.content = rounded(((path.length) * getPxInMeter())) + ' м' :
             textLength.content = Math.round((BiggestPointX - SmallestPointX) * getPxInMeter()) + ' м'; // ?
@@ -379,7 +553,7 @@ window.onload = function () {
 
     function showLengthVertical() {
         // console.log(path.length);
-        var textLength = new PointText(path.interiorPoint.x + 5, path.interiorPoint.y);
+        let textLength = new PointText(path.interiorPoint.x + 5, path.interiorPoint.y);
         path.length < (BiggestPointY - SmallestPointY) ?
             textLength.content = rounded(((path.length) * getPxInMeter())) + ' м' :
             textLength.content = Math.round((BiggestPointY - SmallestPointY) * getPxInMeter()) + ' м';
@@ -410,6 +584,7 @@ window.onload = function () {
             }
         }
     } // красные полоски при положении на одной горизонтальной линии
+
 
     function showSameLengthVerticalLines() {
         let currentPoint, anotherPoint, similarLine, similarAnotherLine;
@@ -494,6 +669,47 @@ window.onload = function () {
     }
 
 
+    function isInnerWall(hitResult) {
+        if (hitResult.type === 'stroke' && hitResult.item.name !== "area") {
+            return true;
+        } else return false;
+    }
+
+    async function postSchema() {
+        {
+            let fullSchema = paper.project.exportSVG({asString: true});
+            let rooms = localStorage.getItem('rooms') ? localStorage.getItem('rooms') : "";
+            let paths = localStorage.getItem('paths') ? localStorage.getItem('paths') : "";
+            let width = localStorage.getItem('width');
+            let height = localStorage.getItem('height');
+
+            fetch(host + "/fetchSchema", {
+                crossDomain: true,
+                method: 'POST',
+                mode: 'cors',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+
+                body: JSON.stringify({
+                    'fullSchema': fullSchema,
+                    'rooms': rooms,
+                    'paths': paths,
+                    'width': width,
+                    'height': height,
+                })
+            })
+                .then(response => response.json())
+                .then(body => {
+                    // const test = body.getReader();
+
+                    console.log(body);
+                })
+        }
+    }
+
+
     // MOUSE HANDLING
     window.app = {
         lines: new Tool({
@@ -528,7 +744,7 @@ window.onload = function () {
                 }
             },
 
-            onMouseUp: function () {
+            onMouseUp: function (event) {
                 path.fullySelected = false;
                 path.strokeColor = 'black';
                 if (path.length < 20) {
@@ -542,12 +758,6 @@ window.onload = function () {
                         if (hitResult.type === 'stroke') {
                             isClosed = true;
                             path.closed = true;
-                            // path.selected= true;
-                            console.log(roomArray);
-                            if (roomArray.includes(path)) {
-                                console.log("да");
-                            }
-                            console.log(path);
                         }
                     } else {
                         isClosed = false;
@@ -555,11 +765,31 @@ window.onload = function () {
                     }
                     finishPath();
                     group.addChild(path);
+                    let firstPoint = path.firstSegment.point;
+                    let lastPoint = path.lastSegment.point;
+
+                    contactPoints.push(firstPoint);
+                    contactPoints.push(lastPoint);
+
+                    console.log(contactPoints);
                 }
                 saveProgress();
             },
 
-            onMouseMove: onMouseMove,
+            onMouseMove: function onMouseMove(event) {
+                figureOutStage();
+                if (area) {
+                    if (isClosed) {
+                        getNearestPointCoord(event);
+                    } else {
+                        new Path.Circle({
+                            center: group.lastChild.lastSegment.point,
+                            radius: 5,
+                            fillColor: '#009dec'
+                        }).removeOnMove();
+                    }
+                }
+            },
             onKeyDown: function (event) {
                 if (event.key === 'backspace') { // удалить предыдущую линию
                     if (group.children.length > 1) {
@@ -575,20 +805,56 @@ window.onload = function () {
                 }
             }
         }),
-        rooms: new Tool()
+        rooms: new Tool({
+            onMouseUp: function (event) {
+                findRoom(event);
+                saveProgress();
+            }
+        }),
+
+        eraser: new Tool({
+
+            onMouseDown: function (event) {
+                let hitResult = group.hitTest(event.point);
+
+                if (!hitResult) {
+                    return project.activeLayer.selected = false;
+                }
+                if (hitResult.item.selected) {
+                    hitResult.item.remove();
+                }
+                if (isInnerWall(hitResult)) {
+                    project.activeLayer.selected = false;
+                    hitResult.item.selected = true;
+                }
+            }
+        }),
+
+        roomAllocator: new Tool({
+            onMouseDown: function (event) {
+                console.log("room allocator");
+                 //console.log(contactPoints);
+
+                for (let i = 0; i < contactPoints.length; i++) {
+                    cntctPointsGroup.addChild( new Path.Circle({
+                        center: contactPoints[i],
+                        radius: 7,
+                        fillColor: '#009dec',
+                        name: "contactPoint",
+                    }));
+                }
+                cntctPointsGroup.bringToFront();
+            },
+
+            onMouseUp: function (event) {
+                // let hitResult = cntctPointsGroup.hitTest(event.point);
+                // if(hitResult){
+                //     console.log(hitResult);
+                // }
+            }
+        })
     }
 
-    function onMouseMove(event) {
-        if (isClosed) {
-            getNearestPointCoord(event);
-        } else {
-            new Path.Circle({
-                center: group.lastChild.lastSegment.point,
-                radius: 5,
-                fillColor: '#009dec'
-            }).removeOnMove();
-        }
-    }
 
     function saveProgress() {
         group.name = 'paths';
@@ -604,6 +870,7 @@ window.onload = function () {
         localStorage.setItem('paths', paths);
         localStorage.setItem('width', xMeters);
         localStorage.setItem('height', yMeters);
+        localStorage.setItem('stage', currentStage);
     }
 
 
@@ -614,6 +881,7 @@ window.onload = function () {
         localStorage.removeItem('height');
         localStorage.removeItem('rooms');
         localStorage.removeItem('rooms-helpers');
+        localStorage.removeItem('stage');
         location.reload();
     });
 
@@ -636,78 +904,31 @@ window.onload = function () {
         $('#addRoomModal').modal('hide');
     });
 
-    $('#test').click(function () {
-        test();
-        // console.log(paper.project.exportSVG({asString :true}));
-        //     fetch("http://127.0.0.1:8000/test", {
-        //         method: "POST",
-        //         mode: "cors",
-        //         credentials: "include"
-        //     }).then(function (response) {
-        //        // return response.json();
-        //         console.log(response);
-        //     });
+    $('#eraserBtn').click(function () {
+        window.app.eraser.activate();
+    });
 
-        // $.post( "http://127.0.0.1:8000/test", function( data ) {
-        //     console.log(data);
-        // });
+    $('#createRoomBtn').click(function () {
+        window.app.roomAllocator.activate();
+        console.log(group.children);
+        let cntctPointsGroup = new Group();
+        for (let i = 0 ; i < group.children.length; i++){
 
-
-    })
-
-
-    async function test() {
-        {
-            let fullSchema = paper.project.exportSVG({asString: true});
-            let rooms = localStorage.getItem('rooms') ? localStorage.getItem('rooms') : "";
-            let paths = localStorage.getItem('paths') ? localStorage.getItem('paths') : "";
-            let width = localStorage.getItem('width');
-            let height = localStorage.getItem('height');
-
-            fetch("http://127.0.0.1:8000/test", {
-                crossDomain:true,
-                method: 'POST',
-                mode:'cors',
-                headers: {'Content-Type': 'application/json',
-                    // 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                    },
-
-                body: JSON.stringify({
-                    'fullSchema': fullSchema,
-                    'rooms': rooms,
-                    'paths': paths,
-                    'width': width,
-                    'height': height,
-                })
-            })
-                .then( response => response.json())
-                .then(body => {
-                   // const test = body.getReader();
-
-                    console.log(body);
-                })
         }
-    }
-}
+    });
 
-// {
-//     fetch("http://127.0.0.1:8000/test", {
-//         crossDomain:true,
-//         method: 'POST',
-//         mode:'cors',
-//         headers: {'Content-Type':'application/json'},
-//     })
-//         .then(async response => {
-//             if (response.ok) {
-//                 // console.log(response);
-//                 this.apiError = false;
-//                 console.log(response);
-//                 this.result = await response.json();
-//
-//             } else {
-//                 this.apiError = true;
-//             }
-//         })
-//         .catch(() => (this.apiError = true));
-// }
-// }
+    $('#postSchemaBtn').click(function () {
+        postSchema();
+    });
+
+    $('#nextStage').click(function () {
+        currentStage++;
+        figureOutStage();
+        saveProgress();
+    });
+    $('#previousStage').click(function () {
+        currentStage--;
+        figureOutStage();
+        saveProgress();
+    });
+});
