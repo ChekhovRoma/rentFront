@@ -11,6 +11,9 @@ let host = "http://127.0.0.1:8000";
 let xMeters;
 let yMeters;
 let placeId = 0;
+let cntctPointsGroup;
+let roomPoits;
+
 let currentStage; // 1 - lines; 2 - rooms
 paper.install(window);
 window.$ = window.jQuery = $;
@@ -60,7 +63,7 @@ $(document).on('start', function () {
 
     let area;
     let contactPoints = [];
-    let cntctPointsGroup = new Group();
+
 
     if (localStorage.getItem('paths')) {
         xMeters = localStorage.getItem('width');
@@ -364,14 +367,10 @@ $(document).on('start', function () {
         area.name = 'area';
 
         console.log(area.segments);
-        for(let i = 0 ; i < area.segments.length; i ++){
+        for (let i = 0; i < area.segments.length; i++) {
             contactPoints.push(area.segments[i].point);
         }
-
         group.addChild(area);
-        console.log("кп");
-        console.log(contactPoints);
-
     }
 
     function getRoundedAngle(angle) {
@@ -833,24 +832,52 @@ $(document).on('start', function () {
         roomAllocator: new Tool({
             onMouseDown: function (event) {
                 console.log("room allocator");
-                 //console.log(contactPoints);
-
-                for (let i = 0; i < contactPoints.length; i++) {
-                    cntctPointsGroup.addChild( new Path.Circle({
-                        center: contactPoints[i],
-                        radius: 7,
-                        fillColor: '#009dec',
-                        name: "contactPoint",
-                    }));
-                }
-                cntctPointsGroup.bringToFront();
             },
 
             onMouseUp: function (event) {
-                // let hitResult = cntctPointsGroup.hitTest(event.point);
-                // if(hitResult){
-                //     console.log(hitResult);
-                // }
+
+                let hitResult = cntctPointsGroup.hitTest(event.point);
+                if (hitResult) {
+                    if (hitResult.item.name == "contactPoint" && hitResult.item.selected == false) {
+                        console.log(hitResult.item.interiorPoint);
+                       // hitResult.item.selected = true;
+                        hitResult.item.fillColor = 'red';
+                        hitResult.item.selected = true;
+                        roomPoits.push(hitResult.item.interiorPoint);
+                    }
+                }
+            },
+
+            onKeyDown: function (event) {
+                if(event.key === 'enter'){
+                    console.log("enter");
+                    let room = new Path();
+                    for(let i = 0 ; i < roomPoits.length; i++){
+                        room.add(roomPoits[i]);
+                    }
+                    room.strokeColor = 'black';
+                    room.strokeWidth = 3;
+                    room.fillColor = 'green';
+                    room.opacity = 0.5;
+                    room.closed = true;
+                    groupRooms.addChild(room);
+                    roomCounter++;
+                    console.log(roomCounter);
+                    cntctPointsGroup.remove();
+                }
+
+                if (event.key === 'backspace'){
+
+                    if(roomPoits.length > 0){
+                       console.log(roomPoits[roomPoits.length - 1]);
+                        let hitResult = cntctPointsGroup.hitTest(roomPoits[roomPoits.length - 1]);
+                        if (hitResult.item.name == "contactPoint") {
+                            hitResult.item.fillColor = '#009dec';
+                            hitResult.item.selected = false;
+                        }
+                        roomPoits.pop();
+                    }
+                }
             }
         })
     }
@@ -910,11 +937,37 @@ $(document).on('start', function () {
 
     $('#createRoomBtn').click(function () {
         window.app.roomAllocator.activate();
-        console.log(group.children);
-        let cntctPointsGroup = new Group();
-        for (let i = 0 ; i < group.children.length; i++){
+        roomPoits = [];
 
+        cntctPointsGroup = new Group();
+        for (let i = 0; i < group.children.length; i++) {
+
+            if (i === 0) {
+                for (let j = 0; j < 4; j++) {
+                    cntctPointsGroup.addChild(new Path.Circle({
+                        center: group.children[i].segments[j].point,
+                        radius: 7,
+                        fillColor: '#009dec',
+                        name: "contactPoint",
+                    }));
+                }
+            }
+
+            cntctPointsGroup.addChild(new Path.Circle({
+                center: group.children[i].firstSegment.point,
+                radius: 7,
+                fillColor: '#009dec',
+                name: "contactPoint",
+            }));
+
+            cntctPointsGroup.addChild(new Path.Circle({
+                center: group.children[i].lastSegment.point,
+                radius: 7,
+                fillColor: '#009dec',
+                name: "contactPoint",
+            }));
         }
+        cntctPointsGroup.bringToFront();
     });
 
     $('#postSchemaBtn').click(function () {
@@ -928,6 +981,7 @@ $(document).on('start', function () {
     });
     $('#previousStage').click(function () {
         currentStage--;
+        cntctPointsGroup.remove();
         figureOutStage();
         saveProgress();
     });
