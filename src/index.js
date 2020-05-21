@@ -10,15 +10,21 @@ require('dotenv').config();
 let host = "http://127.0.0.1:8000";
 let xMeters;
 let yMeters;
-let placeId = 0;
+let placeId;
 let currentStage; // 1 - lines; 2 - rooms
+let schemaId; // Sevak 20.05
 paper.install(window);
 window.$ = window.jQuery = $;
 
-$(document).ready(function () {
-    if (!localStorage.getItem('paths')) {
-        $(document).trigger('createNewSchema');
-    } else $(document).trigger('start');
+$(document).ready(function () { // Sevak 20.05
+    schemaId = $('#schemaId').val();
+    placeId = $('#placeId').val();
+    if (schemaId == 0){
+        if (!localStorage.getItem('paths')) {
+            $(document).trigger('createNewSchema');
+        } else $(document).trigger('start')
+    }
+    else $(document).trigger('start');
 });
 
 $(document).on('createNewSchema', function () {
@@ -62,7 +68,8 @@ $(document).on('start', function () {
     let contactPoints = [];
     let cntctPointsGroup = new Group();
 
-    if (localStorage.getItem('paths')) {
+    if (localStorage.getItem('paths') && schemaId == 0) { // Sevak 20.05
+        console.log('im');
         xMeters = localStorage.getItem('width');
         yMeters = localStorage.getItem('height');
         currentStage = parseInt(localStorage.getItem('stage'));
@@ -86,13 +93,13 @@ $(document).on('start', function () {
         }
     }
 
-    if (placeId > 0) {
+    if (schemaId > 0) { // Sevak 20.05
 
-        let schema = getPlaceSchema(placeId)
+        let schema = getPlaceSchema(schemaId)
             .then(data => {
                 xMeters = data.width;
                 yMeters = data.height;
-                currentStage = 2;
+                currentStage = 1;
                 ratioCalculation(xMeters, yMeters);
                 drawGrid();
                 drawRuler();
@@ -424,6 +431,8 @@ $(document).on('start', function () {
         );
         room.fillColor = 'green';
         room.opacity = 0.5;
+        room.name = 'room'+roomCounter;
+        roomCounter++;
         groupRooms.addChild(room);
     }
 
@@ -689,10 +698,12 @@ $(document).on('start', function () {
                 mode: 'cors',
                 headers: {
                     'Content-Type': 'application/json',
+
                     // 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 },
 
                 body: JSON.stringify({
+                    'placeId': $('#placeId').val(),
                     'fullSchema': fullSchema,
                     'rooms': rooms,
                     'paths': paths,
@@ -700,8 +711,8 @@ $(document).on('start', function () {
                     'height': height,
                 })
             })
-                .then(response => response.json())
-                .then(body => {
+            .then(response => response.json())
+            .then(body => {
                     // const test = body.getReader();
 
                     console.log(body);
@@ -866,6 +877,7 @@ $(document).on('start', function () {
             let roomsHelpers = groupRoomHelpers.exportSVG({asString: true});
             localStorage.setItem('rooms', rooms);
             localStorage.setItem('rooms-helpers', roomsHelpers);
+            localStorage.setItem('roomsCounter', roomCounter);
         }
         localStorage.setItem('paths', paths);
         localStorage.setItem('width', xMeters);
@@ -919,6 +931,7 @@ $(document).on('start', function () {
 
     $('#postSchemaBtn').click(function () {
         postSchema();
+        window.location.replace(host+"/addRooms/"+placeId);
     });
 
     $('#nextStage').click(function () {
