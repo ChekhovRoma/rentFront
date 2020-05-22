@@ -70,6 +70,11 @@ $(document).on('start', function () {
     let BiggestPointX = 700;
     let BiggestPointY = 700;
 
+    let doors = new Group();
+    let doorItem = new Group();
+    let doorSize = 1;
+    let doorRotation = 0;
+
     let area;
     let contactPoints = [];
 
@@ -88,7 +93,7 @@ $(document).on('start', function () {
 
         if (localStorage.getItem('rooms')) {
             let groupRoomsParent = new Group();
-            let groupRoomsHelpersParent = new Group();
+            // let groupRoomsHelpersParent = new Group();
             groupRoomsParent.importSVG(localStorage.getItem('rooms'));
             // groupRoomsHelpersParent.importSVG(localStorage.getItem('rooms-helpers'));
             groupRooms = groupRoomsParent.firstChild;
@@ -97,8 +102,7 @@ $(document).on('start', function () {
         }
     }
 
-    if (schemaId > 0) { // Sevak 20.05
-
+    if (schemaId > 0) {
         let schema = getPlaceSchema(schemaId)
             .then(data => {
                 xMeters = data.width;
@@ -118,19 +122,10 @@ $(document).on('start', function () {
                 groupRoomsParent.importSVG(data.rooms);
                 groupRooms = groupRoomsParent.firstChild;
                 roomCounter = groupRooms.children.length;
-
             });
-        // console.log("schema: ");
-        // console.log(schema['width']);
+    }
 
-
-        // parentGroup.importSVG(schema['paths']);
-        // group = parentGroup.children[0];
-        // if (group.children.length > 1) isClosed = group.lastChild.closed;
-        // area = group.firstChild;
-
-
-    } else {
+    if (!localStorage.getItem('paths') && schemaId == 0) {
         drawArea();
     }
 
@@ -180,7 +175,6 @@ $(document).on('start', function () {
                 break;
             }
             case 2: {
-                console.log(currentStage);
                 $('#helperText').text('Нажимайте внутри помещения для определения комнаты');
                 $('#nextStage').attr('disabled', true);
                 $('#previousStage').attr('disabled', false);
@@ -188,7 +182,6 @@ $(document).on('start', function () {
                 break;
             }
             case 3: {
-                console.log('sd');
                 break;
             }
         }
@@ -374,14 +367,11 @@ $(document).on('start', function () {
         area.strokeColor = 'black';
         area.name = 'area';
 
-        console.log(area.segments);
         for(let i = 0 ; i < area.segments.length; i ++){
             contactPoints.push(area.segments[i].point);
         }
 
         group.addChild(area);
-        console.log("кп");
-        console.log(contactPoints);
 
     }
 
@@ -416,6 +406,12 @@ $(document).on('start', function () {
             path.lastSegment.point.y = SmallestPointY;
         }
     } //отрезать лишнее если вертикальна€ лини€ вышла за пределы
+
+    function cutPath (shortPath, path) {
+        if (shortPath) {
+            path.lastSegment.point = shortPath.lastSegment.point;
+        }
+    }
 
     function findRoom(event) {
         let cross = {
@@ -464,85 +460,36 @@ $(document).on('start', function () {
         } else return 0;
     }
 
-    function findRectangle() {
-        var centralLine = new Path(new Point(path.interiorPoint), new Point(path.interiorPoint.x, path.interiorPoint.y - 1000));
-        centralLine = findShortestLineForCentral(centralLine);
-        if (isTouchRoom(path)) {
-            path.remove();
-            return;
-        }
-        if (centralLine === 0) return;
-        if (path.firstSegment.point.x > path.lastSegment.point.x) {
-            var rightLine = new Path(new Point(centralLine.interiorPoint), new Point(path.lastSegment.point.x - 3, centralLine.interiorPoint.y));
-            var leftLine = new Path(new Point(centralLine.interiorPoint), new Point(path.firstSegment.point.x + 3, centralLine.interiorPoint.y));
-        } else {
-            var rightLine = new Path(new Point(centralLine.interiorPoint), new Point(path.lastSegment.point.x + 3, centralLine.interiorPoint.y));
-            var leftLine = new Path(new Point(centralLine.interiorPoint), new Point(path.firstSegment.point.x - 3, centralLine.interiorPoint.y));
-        }
-        rightLine = findShortestLine(centralLine, rightLine);
-        leftLine = findShortestLine(centralLine, leftLine);
-        if (rightLine !== 0 && leftLine !== 0) {
-            rectangle = new Path.Rectangle(new Point(leftLine.firstSegment.point.x, centralLine.lastSegment.point.y + 1), new Point(rightLine.firstSegment.point.x - 2, centralLine.firstSegment.point.y + 1));
-            rectangle.fillColor = 'yellow';
-            rectangle.opacity = 0.5;
-            rectangle.strokeColor = 'black';
-            $('#addRoomModal').modal('show');
-            rightLine.remove();
-            leftLine.remove();
-            centralLine.remove();
-        }
-    }
-
-    function findShortestLineForCentral(line) {
+    function findShortestLine (line) {
         let intersectionsArray = [];
         let intersections;
-        for (let i = 0; i < group.children.length - 1; i++) {
+        for (let i = 0; i < group.children.length; i++) {
             intersections = line.getIntersections(group.children[i]);
             if (intersections.length !== 0) {
                 intersectionsArray.push(intersections[0]);
             }
         }
         if (intersectionsArray.length !== 0) {
-            let shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(path.interiorPoint));
-            let shortestLineIndex = 0;
+            let shortestLine = new Path(new Point(path.firstSegment.point), new Point(intersectionsArray[0].point));
             let currentLine;
             for (let i = 1; i < intersectionsArray.length; i++) {
-                currentLine = new Path(new Point(intersectionsArray[i].point), new Point(path.interiorPoint));
-                if (shortestLine.length > currentLine.length) {
+                currentLine = new Path(new Point(path.firstSegment.point), new Point(intersectionsArray[i].point));
+                if (currentLine.length < 5) {
+                    continue;
+                }
+                if (shortestLine.length > currentLine.length || shortestLine.length < 5) {
                     shortestLine = currentLine;
-                    shortestLineIndex = i;
                 }
             }
-            return shortestLine;
-        } else return 0;
-    }
-
-    function findShortestLine(centralLine, line) {
-        let intersectionsArray = [];
-        let intersections;
-        for (let i = 0; i < group.children.length - 1; i++) {
-            intersections = line.getIntersections(group.children[i]);
-            if (intersections.length !== 0) {
-                intersectionsArray.push(intersections[0]);
-            }
-        }
-        if (intersectionsArray.length !== 0) {
-            let shortestLine = new Path(new Point(intersectionsArray[0].point), new Point(centralLine.interiorPoint));
-            let shortestLineIndex = 0;
-            let currentLine;
-            for (let i = 1; i < intersectionsArray.length; i++) {
-                currentLine = new Path(new Point(intersectionsArray[i].point), new Point(centralLine.interiorPoint));
-                if (shortestLine.length > currentLine.length) {
-                    shortestLine = currentLine;
-                    shortestLineIndex = i;
-                }
+            if (shortestLine.length < 5) {
+                return 0;
             }
             return shortestLine;
         } else return 0;
     }
 
     function showIntersections() {
-        for (let i = 0; i < group.children.length - 1; i++) {
+        for (let i = 0; i < group.children.length; i++) {
             let intersectPoint = path.getIntersections(group.children[i]);
             intersectPoint.map(function (point) {
                 let intersect = new Path.Circle({
@@ -598,7 +545,6 @@ $(document).on('start', function () {
         }
     } // красные полоски при положении на одной горизонтальной линии
 
-
     function showSameLengthVerticalLines() {
         let currentPoint, anotherPoint, similarLine, similarAnotherLine;
         if (group.children.length > 0) {
@@ -627,14 +573,13 @@ $(document).on('start', function () {
         for (let i = 0; i < groupRoomHelpers.children.length; i++) {
             intersections = line.getIntersections(groupRoomHelpers.children[i]);
             if (intersections.length !== 0) {
-                console.log('hi');
                 return true;
             }
         }
         return false;
     }
 
-    function getNearestPointCoord (event, group, radiusSize = 5) {
+    function getNearestPointCoord (event, group) {
         let nearestPoint = new Point();
         let pointsArray = [];
 
@@ -651,11 +596,6 @@ $(document).on('start', function () {
             }
         }
         mainNearestPoint = nearestPoint;
-        new Path.Circle({
-            center: nearestPoint,
-            radius: radiusSize,
-            fillColor: '#009dec'
-        }).removeOnMove();
     }
 
     function getNearestContactPoint (event, group, radiusSize = 5) {
@@ -764,6 +704,7 @@ $(document).on('start', function () {
                 path.lastSegment.point = event.point;
                 let angle = path.lastSegment.point.subtract(path.firstSegment.point);
                 path.lastSegment.point = path.firstSegment.point.add(getRoundedAngle(angle));
+                cutPath(findShortestLine(path), path);
                 groupRooms.bringToFront();
                 group.bringToFront();
             },
@@ -772,6 +713,7 @@ $(document).on('start', function () {
                 path.lastSegment.point = event.point;
                 let angle = path.lastSegment.point.subtract(path.firstSegment.point);
                 path.lastSegment.point = path.firstSegment.point.add(getRoundedAngle(angle));
+                cutPath(findShortestLine(path), path);
                 showIntersections();
                 if (path.firstCurve.isHorizontal()) {
                     showSameLengthHorizontalLines();
@@ -780,6 +722,7 @@ $(document).on('start', function () {
                     showSameLengthVerticalLines();
                     showLengthVertical();
                 }
+
             },
 
             onMouseUp: function (event) {
@@ -788,6 +731,7 @@ $(document).on('start', function () {
                 if (path.length < 20) {
                     path.remove();
                 } else {
+                    cutPath(findShortestLine(path), path);
                     if (path.firstCurve.isHorizontal()) {
                         cutHorizontalLine();
                     } else cutVerticalLine();
@@ -808,17 +752,23 @@ $(document).on('start', function () {
 
                     contactPoints.push(firstPoint);
                     contactPoints.push(lastPoint);
-
-                    console.log(contactPoints);
                 }
                 saveProgress();
+                console.log(group);
+
             },
 
             onMouseMove: function onMouseMove(event) {
                 figureOutStage();
+                let circle;
                 if (area) {
                     if (isClosed) {
                         getNearestPointCoord(event, group);
+                        circle = new Path.Circle({
+                            center: mainNearestPoint,
+                            radius: 5,
+                            fillColor: '#009dec'
+                        }).removeOnMove();
                     } else {
                         new Path.Circle({
                             center: group.lastChild.lastSegment.point,
@@ -839,7 +789,6 @@ $(document).on('start', function () {
                         isClosed = group.lastChild.closed;
                         saveProgress();
                     }
-
                 }
             }
         }),
@@ -881,10 +830,6 @@ $(document).on('start', function () {
             },
 
             onMouseUp: function (event) {
-                // console.log(nearestContactPoint);
-                // nearestContactPoint.fillColor = '#00FF00';
-                // nearestContactPoint.selected = 'true';
-                // roomPoits.push(nearestContactPoint.interiorPoint);
 
             },
 
@@ -896,21 +841,20 @@ $(document).on('start', function () {
                     }
                     room.strokeColor = 'black';
                     room.strokeWidth = 3;
-                    room.fillColor = '#1E90FF';
+                    room.fillColor = 'green';
                     room.opacity = 0.5;
                     room.closed = true;
                     room.name = 'room'+roomCounter;
                     groupRooms.addChild(room);
 
                     roomCounter++;
-                    console.log(roomCounter);
                     cntctPointsGroup.remove();
+                    saveProgress();
                 }
 
                 if (event.key === 'backspace'){
 
                     if(roomPoits.length > 0){
-                        console.log(roomPoits[roomPoits.length - 1]);
                         let hitResult = cntctPointsGroup.hitTest(roomPoits[roomPoits.length - 1]);
                         if (hitResult.item.name == "contactPoint") {
                             hitResult.item.fillColor = '#696969';
@@ -924,8 +868,38 @@ $(document).on('start', function () {
             onMouseMove: function (event) {
                 getNearestContactPoint(event, cntctPointsGroup, 7);
             }
-        })
-    }
+        }),
+
+        door: new Tool({
+            onMouseDown: function (event) {
+                getNearestPointCoord(event, group);
+                doorPaint();
+                chooseDoorDirection(mainNearestPoint);
+                doors.addChild(doorItem);
+            },
+            onMouseMove: function (event) {
+                getNearestPointCoord(event, group);
+                chooseDoorDirection(mainNearestPoint);
+                doorMoving(mainNearestPoint);
+            },
+            onKeyDown: function (event) {
+                doorItem.removeChildren();
+                if (event.key === 'w') {
+                    if (doorSize < 1.7) doorSize+=0.1;
+                }
+                if (event.key === 'a') {
+                    doorRotation-=180;
+                }
+                if (event.key === 'd') {
+                    doorRotation+=180;
+                }
+                if (event.key === 's') {
+                    if (doorSize > 0.7) doorSize-=0.1;
+                }
+                doorMoving(mainNearestPoint);
+            }
+    })
+}
 
 
     function saveProgress() {
@@ -935,9 +909,9 @@ $(document).on('start', function () {
 
         if (groupRooms.children.length) {
             let rooms = groupRooms.exportSVG({asString: true});
-            let roomsHelpers = groupRoomHelpers.exportSVG({asString: true});
+            // let roomsHelpers = groupRoomHelpers.exportSVG({asString: true});
             localStorage.setItem('rooms', rooms);
-            localStorage.setItem('rooms-helpers', roomsHelpers);
+            // localStorage.setItem('rooms-helpers', roomsHelpers);
             localStorage.setItem('roomsCounter', roomCounter);
         }
         localStorage.setItem('paths', paths);
@@ -945,36 +919,20 @@ $(document).on('start', function () {
         localStorage.setItem('height', yMeters);
         localStorage.setItem('stage', currentStage);
     }
-
-
-    // EVENT HANDLING
-    $('#deleteProgressBtn').click(function () {
+    function deleteProgress () {
         localStorage.removeItem('paths');
         localStorage.removeItem('width');
         localStorage.removeItem('height');
         localStorage.removeItem('rooms');
         localStorage.removeItem('rooms-helpers');
+        localStorage.removeItem('roomCounter');
         localStorage.removeItem('stage');
+    }
+
+    // EVENT HANDLING
+    $('#deleteProgressBtn').click(function () {
+        deleteProgress();
         location.reload();
-    });
-
-    $('#addRoomModal').on('hidden.bs.modal', function (e) {
-        if (isRoom) {
-            groupRooms.addChild(rectangle);
-            groupRoomHelpers.addChild(new Path(rectangle.segments[1].point.add(3), rectangle.segments[3].point.subtract(3), new Point(rectangle.segments[3].point.x - 3, rectangle.segments[3].point.y)));
-            groupRooms.lastChild.fillColor = 'green';
-            groupRooms.lastChild.name = "room" + roomCounter;
-            roomCounter++;
-            saveProgress();
-        } else {
-            rectangle.remove();
-        }
-        isRoom = false;
-    });
-
-    $('#confirmNewRoom').click(function () {
-        isRoom = true;
-        $('#addRoomModal').modal('hide');
     });
 
     $('#eraserBtn').click(function () {
@@ -984,6 +942,7 @@ $(document).on('start', function () {
 
     $('#postSchemaBtn').click(function () {
         postSchema();
+        deleteProgress();
         window.location.replace(host+"/addRooms/"+placeId);
     });
 
@@ -1033,4 +992,67 @@ $(document).on('start', function () {
         }
         cntctPointsGroup.bringToFront();
     });
+
+    $('#doorBtn').click(function () {
+       window.app.door.activate();
+    });
+
+
+    function doorPaint() {
+        doorItem = new Group();
+        let whiteStroke = new Path(new Point(mainNearestPoint),
+            new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
+        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y), new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
+        let arc = new Path.Arc(whiteStroke.firstSegment.point, new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)), blackStroke.lastSegment.point);
+        whiteStroke.strokeColor = 'white';
+        whiteStroke.strokeWidth = 5;
+        blackStroke.strokeColor = 'black';
+        blackStroke.strokeWidth = 3;
+        arc.strokeColor = 'black';
+        arc.dashArray = [10,4];
+        doorItem.addChild(whiteStroke);
+        doorItem.addChild(blackStroke);
+        doorItem.addChild(arc);
+        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
+        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
+        doors.addChild(doorItem);
+        doors.bringToFront();
+    }
+
+    function doorMoving (mainNearestPoint) {
+        doorItem = new Group();
+        let whiteStroke = new Path(new Point(mainNearestPoint),
+                                   new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
+        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y),
+                                   new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
+        let arc = new Path.Arc(whiteStroke.firstSegment.point,
+                               new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)),
+                               blackStroke.lastSegment.point);
+        whiteStroke.strokeColor = 'white';
+        whiteStroke.strokeWidth = 5;
+        blackStroke.strokeColor = 'black';
+        blackStroke.strokeWidth = 3;
+        arc.strokeColor = 'black';
+        arc.dashArray = [10,4];
+        doorItem.addChild(whiteStroke);
+        doorItem.addChild(blackStroke);
+        doorItem.addChild(arc);
+        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
+        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
+        doorItem.bringToFront();
+        doorItem.removeOnMove();
+    }
+
+    function chooseDoorDirection (nearestPoint) {
+        let hitTest = group.hitTest(nearestPoint);
+        if (hitTest.item.firstCurve.isHorizontal()){
+            if ((Math.abs(doorRotation)/90) %2 === 1) {
+                doorRotation = 0;
+            }
+        }
+        else
+            if ((Math.abs(doorRotation)/90) %2 === 0){
+                doorRotation = 270;
+            }
+    }
 });
