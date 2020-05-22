@@ -13,6 +13,11 @@ let yMeters;
 let placeId;
 let currentStage; // 1 - lines; 2 - rooms
 let schemaId; // Sevak 20.05
+let cntctPointsGroup;
+let roomPoits;
+
+
+
 paper.install(window);
 window.$ = window.jQuery = $;
 
@@ -56,6 +61,7 @@ $(document).on('start', function () {
     let groupRooms = new Group();
     let groupRoomHelpers = new Group();
     let mainNearestPoint = new Point();
+    let nearestContactPoint = new Point();
     let roomCounter = 0; // счетчик помещений
     let rulersSmallPointX = 5;
     let rulersSmallPointY = 5;
@@ -66,10 +72,8 @@ $(document).on('start', function () {
 
     let area;
     let contactPoints = [];
-    let cntctPointsGroup = new Group();
 
     if (localStorage.getItem('paths') && schemaId == 0) { // Sevak 20.05
-        console.log('im');
         xMeters = localStorage.getItem('width');
         yMeters = localStorage.getItem('height');
         currentStage = parseInt(localStorage.getItem('stage'));
@@ -630,7 +634,7 @@ $(document).on('start', function () {
         return false;
     }
 
-    function getNearestPointCoord(event) {
+    function getNearestPointCoord (event, group, radiusSize = 5) {
         let nearestPoint = new Point();
         let pointsArray = [];
 
@@ -649,9 +653,33 @@ $(document).on('start', function () {
         mainNearestPoint = nearestPoint;
         new Path.Circle({
             center: nearestPoint,
-            radius: 5,
+            radius: radiusSize,
             fillColor: '#009dec'
         }).removeOnMove();
+    }
+
+    function getNearestContactPoint (event, group, radiusSize = 5) {
+        let currentChildren;
+        let nearestLength = new Path(cntctPointsGroup.firstChild.interiorPoint, event.point).length;
+        let nearestPoint = cntctPointsGroup.firstChild;
+        let hitResult;
+        for (let i = 1; i < cntctPointsGroup.children.length; i++) {
+            currentChildren = cntctPointsGroup.children[i];
+            hitResult = cntctPointsGroup.hitTest(currentChildren.interiorPoint);
+            if (!hitResult.item.selected) {
+                if (nearestLength > new Path(currentChildren.interiorPoint, event.point).length) {
+                    nearestLength = new Path(currentChildren.interiorPoint, event.point).length;
+                    nearestPoint = currentChildren;
+                }
+            }
+        }
+        nearestContactPoint = nearestPoint;
+        let circle = new Path.Circle({
+            center: nearestContactPoint.interiorPoint,
+            radius: radiusSize,
+            fillColor: '#FFA500'
+        }).removeOnMove();
+        circle.removeOnDown();
     }
 
     function finishPath() {
@@ -676,7 +704,6 @@ $(document).on('start', function () {
             isClosed = true;
         }
     }
-
 
     function isInnerWall(hitResult) {
         if (hitResult.type === 'stroke' && hitResult.item.name !== "area") {
@@ -791,7 +818,7 @@ $(document).on('start', function () {
                 figureOutStage();
                 if (area) {
                     if (isClosed) {
-                        getNearestPointCoord(event);
+                        getNearestPointCoord(event, group);
                     } else {
                         new Path.Circle({
                             center: group.lastChild.lastSegment.point,
@@ -843,25 +870,59 @@ $(document).on('start', function () {
 
         roomAllocator: new Tool({
             onMouseDown: function (event) {
-                console.log("room allocator");
-                 //console.log(contactPoints);
-
-                for (let i = 0; i < contactPoints.length; i++) {
-                    cntctPointsGroup.addChild( new Path.Circle({
-                        center: contactPoints[i],
-                        radius: 7,
-                        fillColor: '#009dec',
-                        name: "contactPoint",
-                    }));
+                let hitResult = cntctPointsGroup.hitTest(nearestContactPoint.interiorPoint);
+                if (hitResult) {
+                    if (hitResult.item.name == "contactPoint" && hitResult.item.selected == false) {
+                        hitResult.item.fillColor = '#1E90FF';
+                        hitResult.item.selected = true;
+                        roomPoits.push(hitResult.item.interiorPoint);
+                    }
                 }
-                cntctPointsGroup.bringToFront();
             },
 
             onMouseUp: function (event) {
-                // let hitResult = cntctPointsGroup.hitTest(event.point);
-                // if(hitResult){
-                //     console.log(hitResult);
-                // }
+                // console.log(nearestContactPoint);
+                // nearestContactPoint.fillColor = '#00FF00';
+                // nearestContactPoint.selected = 'true';
+                // roomPoits.push(nearestContactPoint.interiorPoint);
+
+            },
+
+            onKeyDown: function (event) {
+                if(event.key === 'enter'){
+                    let room = new Path();
+                    for(let i = 0 ; i < roomPoits.length; i++){
+                        room.add(roomPoits[i]);
+                    }
+                    room.strokeColor = 'black';
+                    room.strokeWidth = 3;
+                    room.fillColor = '#1E90FF';
+                    room.opacity = 0.5;
+                    room.closed = true;
+                    room.name = 'room'+roomCounter;
+                    groupRooms.addChild(room);
+
+                    roomCounter++;
+                    console.log(roomCounter);
+                    cntctPointsGroup.remove();
+                }
+
+                if (event.key === 'backspace'){
+
+                    if(roomPoits.length > 0){
+                        console.log(roomPoits[roomPoits.length - 1]);
+                        let hitResult = cntctPointsGroup.hitTest(roomPoits[roomPoits.length - 1]);
+                        if (hitResult.item.name == "contactPoint") {
+                            hitResult.item.fillColor = '#696969';
+                            hitResult.item.selected = false;
+                        }
+                        roomPoits.pop();
+                    }
+                }
+            },
+
+            onMouseMove: function (event) {
+                getNearestContactPoint(event, cntctPointsGroup, 7);
             }
         })
     }
@@ -920,14 +981,6 @@ $(document).on('start', function () {
         window.app.eraser.activate();
     });
 
-    $('#createRoomBtn').click(function () {
-        window.app.roomAllocator.activate();
-        console.log(group.children);
-        let cntctPointsGroup = new Group();
-        for (let i = 0 ; i < group.children.length; i++){
-
-        }
-    });
 
     $('#postSchemaBtn').click(function () {
         postSchema();
@@ -942,6 +995,42 @@ $(document).on('start', function () {
     $('#previousStage').click(function () {
         currentStage--;
         figureOutStage();
+        cntctPointsGroup.remove();
         saveProgress();
+    });
+
+    $('#createRoomBtn').click(function () {
+        window.app.roomAllocator.activate();
+        roomPoits = [];
+
+        cntctPointsGroup = new Group();
+        for (let i = 0; i < group.children.length; i++) {
+
+            if (i === 0) {
+                for (let j = 0; j < 4; j++) {
+                    cntctPointsGroup.addChild(new Path.Circle({
+                        center: group.children[i].segments[j].point,
+                        radius: 7,
+                        fillColor: '#696969',
+                        name: "contactPoint",
+                    }));
+                }
+            }
+
+            cntctPointsGroup.addChild(new Path.Circle({
+                center: group.children[i].firstSegment.point,
+                radius: 7,
+                fillColor: '#696969',
+                name: "contactPoint",
+            }));
+
+            cntctPointsGroup.addChild(new Path.Circle({
+                center: group.children[i].lastSegment.point,
+                radius: 7,
+                fillColor: '#696969',
+                name: "contactPoint",
+            }));
+        }
+        cntctPointsGroup.bringToFront();
     });
 });
