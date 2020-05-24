@@ -70,10 +70,15 @@ $(document).on('start', function () {
     let BiggestPointX = 700;
     let BiggestPointY = 700;
 
-    let doors = new Group();
+    let doorsGroup = new Group();
     let doorItem = new Group();
     let doorSize = 1;
     let doorRotation = 0;
+
+    let windowsGroup = new Group();
+    let windowItem = new Group();
+    let windowSize = 1;
+    let windowRotation = 0;
 
     let area;
     let contactPoints = [];
@@ -93,12 +98,20 @@ $(document).on('start', function () {
 
         if (localStorage.getItem('rooms')) {
             let groupRoomsParent = new Group();
-            // let groupRoomsHelpersParent = new Group();
             groupRoomsParent.importSVG(localStorage.getItem('rooms'));
-            // groupRoomsHelpersParent.importSVG(localStorage.getItem('rooms-helpers'));
             groupRooms = groupRoomsParent.firstChild;
-            // groupRoomHelpers = groupRoomsHelpersParent.firstChild;
             roomCounter = groupRooms.children.length;
+        }
+
+        if (localStorage.getItem('doors')) {
+            let groupDoorsParent = new Group();
+            groupDoorsParent.importSVG(localStorage.getItem('doors'));
+            doorsGroup = groupDoorsParent.firstChild;
+        }
+        if (localStorage.getItem('windows')) {
+            let groupWindowsParent = new Group();
+            groupWindowsParent.importSVG(localStorage.getItem('windows'));
+            windowsGroup = groupWindowsParent.firstChild;
         }
     }
 
@@ -122,6 +135,16 @@ $(document).on('start', function () {
                 groupRoomsParent.importSVG(data.rooms);
                 groupRooms = groupRoomsParent.firstChild;
                 roomCounter = groupRooms.children.length;
+                if (data.doors) {
+                    let groupDoorsParent = new Group();
+                    groupDoorsParent.importSVG(data.rooms);
+                    doorsGroup = groupDoorsParent.firstChild;
+                }
+                if (data.windows) {
+                    let groupWindowsParent = new Group();
+                    groupWindowsParent.importSVG(data.rooms);
+                    windowsGroup = groupWindowsParent.firstChild;
+                }
             });
     }
 
@@ -399,7 +422,7 @@ $(document).on('start', function () {
     } //отрезать лишнее если горизонтальна€ лини€ вышла за пределы
 
     function cutVerticalLine() { //отрезать лишнее если вертикальна€ лини€ вышла за пределы
-        var location = path.lastSegment.point;
+        let location = path.lastSegment.point;
         if (location.y > BiggestPointY) {
             path.lastSegment.point.y = BiggestPointY;
         } else if (location.y < SmallestPointY) {
@@ -410,6 +433,111 @@ $(document).on('start', function () {
     function cutPath (shortPath, path) {
         if (shortPath) {
             path.lastSegment.point = shortPath.lastSegment.point;
+        }
+    }
+
+    function doorPaint() {
+        doorItem = new Group();
+        let whiteStroke = new Path(new Point(mainNearestPoint),
+            new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
+        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y),
+            new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
+        let arc = new Path.Arc(whiteStroke.firstSegment.point,
+            new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)), blackStroke.lastSegment.point);
+        whiteStroke.strokeColor = 'white';
+        whiteStroke.strokeWidth = 5;
+        blackStroke.strokeColor = 'black';
+        blackStroke.strokeWidth = 3;
+        arc.strokeColor = 'black';
+        arc.dashArray = [10,4];
+        doorItem.addChild(whiteStroke);
+        doorItem.addChild(blackStroke);
+        doorItem.addChild(arc);
+        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
+        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
+        doorsGroup.addChild(doorItem);
+        doorsGroup.bringToFront();
+    }
+
+    function doorMoving (mainNearestPoint) {
+        doorItem = new Group();
+        let whiteStroke = new Path(new Point(mainNearestPoint),
+            new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
+        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y),
+            new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
+        let arc = new Path.Arc(whiteStroke.firstSegment.point,
+            new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)),
+            blackStroke.lastSegment.point);
+        whiteStroke.strokeColor = 'white';
+        whiteStroke.strokeWidth = 5;
+        blackStroke.strokeColor = 'black';
+        blackStroke.strokeWidth = 3;
+        arc.strokeColor = 'black';
+        arc.dashArray = [10,4];
+        doorItem.addChild(whiteStroke);
+        doorItem.addChild(blackStroke);
+        doorItem.addChild(arc);
+        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
+        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
+        doorItem.bringToFront();
+        doorItem.removeOnMove();
+    }
+
+    function chooseDoorDirection (nearestPoint) {
+        let hitTest = group.hitTest(nearestPoint);
+        if (hitTest.location) {
+            if (hitTest.location.curve.isHorizontal()) {
+                if ((Math.abs(doorRotation) / 90) % 2 === 1) {
+                    doorRotation = 0;
+                }
+            } else if ((Math.abs(doorRotation) / 90) % 2 === 0) {
+                doorRotation = 270;
+            }
+        }
+    }
+
+    function windowPaint (point) {
+        windowItem = new Group();
+        let whiteStroke = new Path(new Point(point.x-13, point.y), new Point(point.x+13, point.y));
+        whiteStroke.strokeWidth = 7;
+        whiteStroke.strokeColor = "white";
+        let blackStroke = new Path(new Point(point.x-13, point.y), new Point(point.x+13, point.y));
+        blackStroke.strokeWidth = 1;
+        blackStroke.strokeColor = "gray";
+        windowItem.addChild(whiteStroke);
+        windowItem.addChild(blackStroke);
+        windowItem.scale(windowSize, whiteStroke.interiorPoint);
+        windowItem.rotate(windowRotation, whiteStroke.interiorPoint);
+        windowsGroup.addChild(windowItem);
+        windowsGroup.bringToFront();
+    }
+
+    function windowMoving (point){
+        windowItem = new Group();
+        let whiteStroke = new Path(new Point(point.x-13, point.y), new Point(point.x+13, point.y));
+        whiteStroke.strokeWidth = 7;
+        whiteStroke.strokeColor = "white";
+        let blackStroke = new Path(new Point(point.x-13, point.y), new Point(point.x+13, point.y));
+        blackStroke.strokeWidth = 1;
+        blackStroke.strokeColor = "gray";
+        windowItem.addChild(whiteStroke);
+        windowItem.addChild(blackStroke);
+        windowItem.scale(windowSize, whiteStroke.interiorPoint);
+        windowItem.rotate(windowRotation, whiteStroke.interiorPoint);
+        windowItem.bringToFront();
+        windowItem.removeOnMove();
+    }
+
+    function chooseWindowDirection (nearestPoint) {
+        let hitTest = area.hitTest(nearestPoint);
+        if (hitTest.location) {
+            if (hitTest.location.curve.isHorizontal()) {
+                if ((Math.abs(windowRotation) / 90) % 2 === 1) {
+                    windowRotation = 0;
+                }
+            } else if ((Math.abs(windowRotation) / 90) % 2 === 0) {
+                windowRotation = 90;
+            }
         }
     }
 
@@ -655,9 +783,12 @@ $(document).on('start', function () {
         {
             let fullSchema = paper.project.exportSVG({asString: true});
             let rooms = localStorage.getItem('rooms') ? localStorage.getItem('rooms') : "";
+            let doors = localStorage.getItem('doors') ? localStorage.getItem('doors'): "";
+            let windows = localStorage.getItem('windows') ? localStorage.getItem('windows'): "";
             let paths = localStorage.getItem('paths') ? localStorage.getItem('paths') : "";
             let width = localStorage.getItem('width');
             let height = localStorage.getItem('height');
+
 
             fetch(host + "/fetchSchema", {
                 crossDomain: true,
@@ -676,6 +807,8 @@ $(document).on('start', function () {
                     'paths': paths,
                     'width': width,
                     'height': height,
+                    'doors' : doors,
+                    'windows': windows
                 })
             })
             .then(response => response.json())
@@ -853,7 +986,6 @@ $(document).on('start', function () {
                 }
 
                 if (event.key === 'backspace'){
-
                     if(roomPoits.length > 0){
                         let hitResult = cntctPointsGroup.hitTest(roomPoits[roomPoits.length - 1]);
                         if (hitResult.item.name == "contactPoint") {
@@ -861,6 +993,7 @@ $(document).on('start', function () {
                             hitResult.item.selected = false;
                         }
                         roomPoits.pop();
+                        saveProgress();
                     }
                 }
             },
@@ -873,9 +1006,9 @@ $(document).on('start', function () {
         door: new Tool({
             onMouseDown: function (event) {
                 getNearestPointCoord(event, group);
-                doorPaint();
                 chooseDoorDirection(mainNearestPoint);
-                doors.addChild(doorItem);
+                doorPaint();
+                saveProgress();
             },
             onMouseMove: function (event) {
                 getNearestPointCoord(event, group);
@@ -884,21 +1017,46 @@ $(document).on('start', function () {
             },
             onKeyDown: function (event) {
                 doorItem.removeChildren();
-                if (event.key === 'w') {
+                if (event.key === 'w' || event.key === 'ц') {
                     if (doorSize < 1.7) doorSize+=0.1;
                 }
-                if (event.key === 'a') {
+                if (event.key === 'a' || event.key === 'ф') {
                     doorRotation-=180;
                 }
-                if (event.key === 'd') {
+                if (event.key === 'd' || event.key === 'в') {
                     doorRotation+=180;
                 }
-                if (event.key === 's') {
+                if (event.key === 's' || event.key === 'ы') {
                     if (doorSize > 0.7) doorSize-=0.1;
                 }
                 doorMoving(mainNearestPoint);
             }
-    })
+        }),
+
+        window: new Tool({
+            point: new Point(),
+            onMouseMove: (event) => {
+                this.point = area.getNearestPoint(event.point);
+                chooseWindowDirection(this.point);
+                windowMoving(this.point);
+            },
+            onMouseDown: (event) => {
+                this.point = area.getNearestPoint(event.point);
+                chooseWindowDirection(this.point);
+                windowPaint(this.point);
+                saveProgress();
+            },
+            onKeyDown: (event) => {
+                windowItem.removeChildren();
+                if (event.key === 'w' || event.key === 'ц') {
+                    if (windowSize < 1.7) windowSize+=0.1;
+                }
+                if (event.key === 's' || event.key === 'ы') {
+                    if (windowSize > 0.7) windowSize-=0.1;
+                }
+                windowMoving(this.point);
+            }
+        })
 }
 
 
@@ -914,6 +1072,14 @@ $(document).on('start', function () {
             // localStorage.setItem('rooms-helpers', roomsHelpers);
             localStorage.setItem('roomsCounter', roomCounter);
         }
+        if (doorsGroup.children.length) {
+            let doors = doorsGroup.exportSVG({asString: true});
+            localStorage.setItem('doors', doors);
+        }
+        if (windowsGroup.children.length) {
+            let windows = windowsGroup.exportSVG({asString: true});
+            localStorage.setItem('windows', windows);
+        }
         localStorage.setItem('paths', paths);
         localStorage.setItem('width', xMeters);
         localStorage.setItem('height', yMeters);
@@ -927,6 +1093,7 @@ $(document).on('start', function () {
         localStorage.removeItem('rooms-helpers');
         localStorage.removeItem('roomCounter');
         localStorage.removeItem('stage');
+        localStorage.removeItem('doors');
     }
 
     // EVENT HANDLING
@@ -997,62 +1164,9 @@ $(document).on('start', function () {
        window.app.door.activate();
     });
 
+    $('#windowBtn').click(function () {
+        window.app.window.activate();
+    });
 
-    function doorPaint() {
-        doorItem = new Group();
-        let whiteStroke = new Path(new Point(mainNearestPoint),
-            new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
-        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y), new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
-        let arc = new Path.Arc(whiteStroke.firstSegment.point, new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)), blackStroke.lastSegment.point);
-        whiteStroke.strokeColor = 'white';
-        whiteStroke.strokeWidth = 5;
-        blackStroke.strokeColor = 'black';
-        blackStroke.strokeWidth = 3;
-        arc.strokeColor = 'black';
-        arc.dashArray = [10,4];
-        doorItem.addChild(whiteStroke);
-        doorItem.addChild(blackStroke);
-        doorItem.addChild(arc);
-        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
-        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
-        doors.addChild(doorItem);
-        doors.bringToFront();
-    }
 
-    function doorMoving (mainNearestPoint) {
-        doorItem = new Group();
-        let whiteStroke = new Path(new Point(mainNearestPoint),
-                                   new Point(mainNearestPoint.x + 30, mainNearestPoint.y));
-        let blackStroke = new Path(new Point(mainNearestPoint.x + 30, mainNearestPoint.y),
-                                   new Point(mainNearestPoint.x + 30, mainNearestPoint.y + 30));
-        let arc = new Path.Arc(whiteStroke.firstSegment.point,
-                               new Point(whiteStroke.firstSegment.point.x+(30/3), blackStroke.lastSegment.point.y-(30/3)),
-                               blackStroke.lastSegment.point);
-        whiteStroke.strokeColor = 'white';
-        whiteStroke.strokeWidth = 5;
-        blackStroke.strokeColor = 'black';
-        blackStroke.strokeWidth = 3;
-        arc.strokeColor = 'black';
-        arc.dashArray = [10,4];
-        doorItem.addChild(whiteStroke);
-        doorItem.addChild(blackStroke);
-        doorItem.addChild(arc);
-        doorItem.rotate(doorRotation, doorItem.firstChild.firstSegment.point);
-        doorItem.scale(doorSize, doorItem.firstChild.firstSegment.point);
-        doorItem.bringToFront();
-        doorItem.removeOnMove();
-    }
-
-    function chooseDoorDirection (nearestPoint) {
-        let hitTest = group.hitTest(nearestPoint);
-        if (hitTest.item.firstCurve.isHorizontal()){
-            if ((Math.abs(doorRotation)/90) %2 === 1) {
-                doorRotation = 0;
-            }
-        }
-        else
-            if ((Math.abs(doorRotation)/90) %2 === 0){
-                doorRotation = 270;
-            }
-    }
 });
