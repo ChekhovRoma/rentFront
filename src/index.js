@@ -413,7 +413,7 @@ $(document).on('start', function () {
     } // возвращает выравненный угол
 
     function cutHorizontalLine() {
-        var location = path.lastSegment.point;
+        let location = path.lastSegment.point;
         if (location.x > BiggestPointX) {
             path.lastSegment.point.x = BiggestPointX;
         } else if (location.x < SmallestPointX) {
@@ -933,19 +933,93 @@ $(document).on('start', function () {
         }),
 
         eraser: new Tool({
-
-            onMouseDown: function (event) {
-                let hitResult = group.hitTest(event.point);
-
-                if (!hitResult) {
-                    return project.activeLayer.selected = false;
+            choosenElement: new Path,
+            onMouseDown: (event) => {
+                if (this.choosenElement.isDescendant(group)){
+                    if (doorsGroup.children.length) {
+                        for (let i = 0; i<doorsGroup.children.length; i++) {
+                            if (this.choosenElement.contains(doorsGroup.children[i].firstChild.interiorPoint)) {
+                                doorsGroup.children[i].remove();
+                            }
+                        }
+                    }
+                    if (groupRooms.children.length) {
+                        for (let i = 0; i<groupRooms.children.length; i++) {
+                            if (groupRooms.children[i].contains(this.choosenElement.interiorPoint)){
+                                groupRooms.children[i].remove();
+                            }
+                        }
+                    }
                 }
-                if (hitResult.item.selected) {
-                    hitResult.item.remove();
+                this.choosenElement.remove();
+            },
+            onMouseMove: (event) => {
+                let pointInRoom = false;
+                group.strokeColor = 'black';
+                if (groupRooms.children.length){
+                    for (let i = 0; i < groupRooms.children.length; i++) {
+                        if (groupRooms.children[i].contains(event.point)){
+                            groupRooms.children[i].fillColor = 'red';
+                            this.choosenElement = groupRooms.children[i];
+                            pointInRoom = true;
+                        }
+                        else {
+                            groupRooms.children[i].fillColor = 'green';
+                        }
+                    }
+                    if (pointInRoom) {
+                        pointInRoom = false;
+                        return;
+                    }
                 }
-                if (isInnerWall(hitResult)) {
-                    project.activeLayer.selected = false;
-                    hitResult.item.selected = true;
+                if (doorsGroup.children.length){
+                    for (let i = 0; i < doorsGroup.children.length; i++) {
+                        let distance = new Path(event.point, doorsGroup.children[i].firstChild.interiorPoint).length;
+                        if (distance < 30) {
+                            doorsGroup.children[i].strokeColor = '#ff2500';
+                            this.choosenElement = doorsGroup.children[i];
+                            pointInRoom = true;
+                        }
+                        else {
+                            doorsGroup.children[i].children[0].strokeColor = 'white';
+                            doorsGroup.children[i].children[1].strokeColor = 'black';
+                            doorsGroup.children[i].children[2].strokeColor = 'black';
+                        }
+                        if (pointInRoom) {
+                            pointInRoom = false;
+                            return;
+                        }
+                    }
+                }
+                if (windowsGroup.children.length){
+                    for (let i = 0; i < windowsGroup.children.length; i++) {
+                        let distance = new Path(event.point, windowsGroup.children[i].firstChild.interiorPoint).length;
+                        if (distance < 30) {
+                            windowsGroup.children[i].children[0].strokeColor = '#ff2500';
+                            this.choosenElement = windowsGroup.children[i];
+                            pointInRoom = true;
+                        }
+                        else {
+                            windowsGroup.children[i].children[0].strokeColor = 'white';
+                        }
+                        if (pointInRoom) {
+                            pointInRoom = false;
+                            return;
+                        }
+                    }
+                }
+                getNearestPointCoord(event, group);
+                let testResult = group.hitTest(mainNearestPoint);
+                if (testResult.item) {
+                    if (testResult.item.name !== 'area') {
+                        group.strokeColor = 'black';
+                        testResult.item.bringToFront();
+                        testResult.item.strokeColor = '#ff2500';
+                        this.choosenElement = testResult.item;
+                    }
+                    else {
+                        this.choosenElement = new Path();
+                    }
                 }
             }
         }),
@@ -975,6 +1049,7 @@ $(document).on('start', function () {
                     room.strokeColor = 'black';
                     room.strokeWidth = 3;
                     room.fillColor = 'green';
+                    room.strokeWidth = 0;
                     room.opacity = 0.5;
                     room.closed = true;
                     room.name = 'room'+roomCounter;
